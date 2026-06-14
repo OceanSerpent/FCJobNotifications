@@ -23,7 +23,7 @@ from pathlib import Path
 GMAIL_SENDER   = os.environ.get("GMAIL_SENDER", "YOUR_GMAIL_ADDRESS@gmail.com")  # Gmail you send FROM
 GMAIL_APP_PW   = os.environ.get("GMAIL_APP_PW", "xxxx xxxx xxxx xxxx")           # Gmail App Password (16 chars)
 NOTIFY_SMS     = "6092716429@tmomail.net"         # SMS via Mint Mobile gateway
-CHECK_INTERVAL = 30 * 60                          # 30 minutes in seconds
+CHECK_INTERVAL = 10 * 60                          # 10 minutes in seconds
 
 # Target warehouse details
 TARGET_SITE_NAME = "SPA4"
@@ -55,19 +55,16 @@ def save_seen_jobs(job_ids: set):
 
 
 def is_spa4_job(job: dict) -> bool:
-    """Return True if the job is located at the SPA4 / Middletown facility."""
-    address  = (job.get("address", "") or "").lower()
-    city     = (job.get("city", "")    or "").lower()
-    state    = (job.get("state", "")   or "").upper()
-    location = (job.get("location", "") or "").lower()
-    label    = (job.get("label", "")   or "").lower()
-
-    address_match = TARGET_ADDRESS.lower() in address or TARGET_ADDRESS.lower() in location
-    city_match    = TARGET_CITY.lower() in city or TARGET_CITY.lower() in location
-    state_match   = TARGET_STATE.upper() == state or TARGET_STATE.lower() in location
-    site_match    = TARGET_SITE_NAME.lower() in label or TARGET_SITE_NAME.lower() in location
-
-    return (address_match or site_match) and (city_match or state_match)
+    """Return True if the job card shows Middletown, PA in any location field."""
+    target = f"{TARGET_CITY}, {TARGET_STATE}".lower()  # "middletown, pa"
+    all_text = " ".join([
+        job.get("location", "") or "",
+        job.get("city", "")     or "",
+        job.get("state", "")    or "",
+        job.get("address", "")  or "",
+        job.get("label", "")    or "",
+    ]).lower()
+    return target in all_text
 
 
 def scrape_jobs() -> list[dict]:
@@ -97,31 +94,35 @@ def scrape_jobs() -> list[dict]:
         page.goto(SEARCH_URL, timeout=60_000, wait_until="networkidle")
         page.wait_for_timeout(5000)  # Extra wait for dynamic content
 
-        # Try to read rendered HTML job cards as fallback
-        cards = page.query_selector_all(
-            "[data-test-component='StencilReact'] li, .job-card, [class*='jobCard'], [class*='job-tile']"
-        )
+        # Read rendered HTML job cards using the actual class names from the page
+        cards = page.query_selector_all("[data-test-id='JobCard']")
         for card in cards:
             try:
-                title_el  = card.query_selector("[class*='title'], h2, h3")
-                loc_el    = card.query_selector("[class*='location'], [class*='address']")
-                link_el   = card.query_selector("a")
-                job_id_el = card.get_attribute("data-job-id") or card.get_attribute("id") or ""
+                title_el = card.query_selector(".jobDetailText strong, [class*='jobDetailText'] strong")
+                loc_el   = card.query_selector("[class*='1nbzu07']")  # "Within X mi | City, ST"
+                job_id   = card.get_attribute("data-job-id") or card.get_attribute("id") or ""
 
                 title    = title_el.inner_text().strip() if title_el else ""
                 location = loc_el.inner_text().strip()   if loc_el  else ""
-                href     = link_el.get_attribute("href") if link_el else ""
-                job_id   = job_id_el or href or title
 
+                # Fallback: grab all text and find the city/state line
+                if not location:
+                    full_text = card.inner_text()
+                    for line in full_text.splitlines():
+                        if "," in line and any(s in line for s in [" PA", " MD", " VA", " NY"]):
+                            location = line.strip()
+                            break
+
+                job_id = job_id or title
                 if title:
                     jobs.append({
                         "id":       job_id,
                         "title":    title,
                         "location": location,
-                        "city":     TARGET_CITY  if TARGET_CITY.lower()  in location.lower() else "",
-                        "state":    TARGET_STATE if TARGET_STATE          in location         else "",
-                        "address":  TARGET_ADDRESS if TARGET_ADDRESS.lower() in location.lower() else "",
-                        "url":      f"https://hiring.amazon.com{href}" if href.startswith("/") else href,
+                        "city":     "",
+                        "state":    "",
+                        "address":  "",
+                        "url":      SEARCH_URL,
                     })
             except Exception:
                 continue

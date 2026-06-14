@@ -2,7 +2,7 @@ name: Amazon SPA4 Job Alert
 
 on:
   schedule:
-    - cron: "0,30 * * * *"   # Runs every 30 minutes
+    - cron: "*/10 * * * *"   # Runs every 10 minutes
   workflow_dispatch:
     inputs:
       test_mode:
