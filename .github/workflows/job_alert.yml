@@ -3,7 +3,12 @@ name: Amazon SPA4 Job Alert
 on:
   schedule:
     - cron: "0,30 * * * *"   # Runs every 30 minutes
-  workflow_dispatch:          # Allows manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Send a test SMS without scraping (yes/no)'
+        required: false
+        default: 'no'
 
 jobs:
   check-jobs:
@@ -32,7 +37,15 @@ jobs:
           restore-keys: |
             seen-jobs-
 
-      - name: Run job alert check
+      - name: Run job alert (test mode)
+        if: ${{ github.event.inputs.test_mode == 'yes' }}
+        env:
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_APP_PW: ${{ secrets.GMAIL_APP_PW }}
+        run: python amazon_job_alert.py --test
+
+      - name: Run job alert (normal mode)
+        if: ${{ github.event.inputs.test_mode != 'yes' }}
         env:
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
           GMAIL_APP_PW: ${{ secrets.GMAIL_APP_PW }}
