@@ -292,6 +292,18 @@ STEP 5 (optional) ─ Keep it running 24/7
 """)
 
 
+def send_test_sms():
+    """Send a fake job notification to verify SMS is working."""
+    fake_jobs = [{
+        "id":    "TEST-001",
+        "title": "Fulfillment Associate (TEST)",
+        "url":   SEARCH_URL,
+    }]
+    print(f"[{now()}] Sending test SMS to {NOTIFY_SMS} ...")
+    send_sms(fake_jobs)
+    print(f"[{now()}] ✅ Test complete! Check your phone.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Amazon SPA4 Job Alert Bot")
     parser.add_argument("--once",  action="store_true", help="Check once and exit")
@@ -307,14 +319,3 @@ if __name__ == "__main__":
         check_once()
     else:
         run_loop()
-
-def send_test_sms():
-    """Send a fake job notification to verify SMS is working."""
-    fake_jobs = [{
-        "id":    "TEST-001",
-        "title": "Fulfillment Associate (TEST)",
-        "url":   SEARCH_URL,
-    }]
-    print(f"[{now()}] Sending test SMS to {NOTIFY_SMS} ...")
-    send_sms(fake_jobs)
-    print(f"[{now()}] ✅ Test complete! Check your phone.")
